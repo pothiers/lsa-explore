@@ -1,7 +1,42 @@
+import os
+import fnmatch
+import numpy as np
+import pandas as pd
+
+FIELDS = [
+    'DATE-OBS',
+    'DTCALDAT',
+    'DTTELESC',
+    'DTINSTRU',
+    'OBSTYPE',
+    'PROCTYPE',
+    'PRODTYPE',
+    'DTSITE',
+    'OBSERVAT',
+    #'REFERENCE',
+    #'FILESIZE',
+    #'MD5SUM',
+    'DTACQNAM',
+    'DTPROPID',
+    #'PI',
+    #'RELEASE_DATE',
+    'RA',
+    'DEC',
+    #'FOOTPRINT',
+    'FILTER',
+    'EXPTIME', #'EXPOSURE', 
+    'OBSMODE',
+    'SEEING',
+    #'DEPTH',
+    #'SURVEYID',
+    'OBJECT',
+    ]
+
+
+
 # HDF5 storage of dataframe metadata from 
 # https://stackoverflow.com/questions/29129095/save-additional-attributes-in-pandas-dataframe/29130146#29130146
 # note: needed to 'pip install --upgrade tables' for HDFStore
-
 def h5store(filename, df, **kwargs):
     store = pd.HDFStore(filename)
     store.put('mydata', df)
@@ -13,25 +48,22 @@ def h5load(store):
     metadata = store.get_storer('mydata').attrs.metadata
     return data, metadata
 
-#%%writefile ProcessJSON.txt
-# to write this cell out for printing, uncomment the line above: 
-# otherwise leave it commented, or this cell may not compile
-
 class ProcessJSON(object):
 
-    def __init__(self, datadir, savdir='processed', file_hdr='local_file'):
+    def __init__(self, datadir,
+                 savdir='~/pandas-snapshots',
+                 file_hdr='local_file'):
         self._datadir   = datadir
-        self._savdir    = savdir
+        self._savdir    = os.path.expanduser(savdir)
         self._file_hdr  = file_hdr
         self._txtfmt    = 'DATE:{}, {} FILES'  # date, number of files that date
         self._savfmt    = '{}/{}-processed.hdf5' # savdir, date
         self._errmsg    = 'ERROR: Need to run .run() method first!'
-        self._error_group_col = \
-              'ERROR: grouping column {} in file {} does not have a unique value'
-            
+        self._error_group_col = ('ERROR: grouping column {} in file {}'
+                                 ' does not have a unique value')
         self._metadata        = {}
         self._date            = None
-        self._important       = None  # no self-importance here!
+        self._important       = FIELDS
         self._processed       = None
         self._group_col       = None
         self._num             = None
@@ -44,7 +76,8 @@ class ProcessJSON(object):
         
     def _get_file_list(self):
         file_list = []
-        for dirpath, dirs, files in os.walk(os.path.join(self._datadir, self._date)): 
+        for dirpath, dirs, files in os.walk(os.path.join(self._datadir,
+                                                         self._date)): 
             for filename in fnmatch.filter(files, '*.json'):
                 file_list.append(os.path.join(dirpath, filename))
         self._num = min(len(file_list), self._num_to_read)
@@ -56,7 +89,8 @@ class ProcessJSON(object):
         self._get_file_list()
         print('processing ', self._txtfmt.format(self._date, self._num))
         
-        # if important keys are provided, make a dummy starting dataframe with those keys
+        # if important keys are provided, make a dummy starting dataframe
+        # with those keys
         dd = [] if self._important == None else [pd.DataFrame(columns=self._important)]
         
         for k in range(self._num):
@@ -66,10 +100,11 @@ class ProcessJSON(object):
             # in this file across the HDUs, otherwise assert an error; 
             # TODO: make this a try/except: save bad filenames and keep moving
             assert jj[self._group_col].nunique() == 1, \
-                self._error_group_col.format(self._group_col, self._file_list[k])
+                self._error_group_col.format(self._group_col,self._file_list[k])
             
             # if existing and unique, broadcast the grouping-column value
-            # to the entire grouping column: this is required for proper grouping later;
+            # to the entire grouping column: this is required for proper
+            # grouping later;
             # usually grouping column is 'DTINSTRU', the instrument name
             jj[self._group_col] = jj[self._group_col].dropna().iloc[0]
             
@@ -147,14 +182,13 @@ class ProcessJSON(object):
     
     @property
     def get_HDU_uniqueness_per_file(self):
-        gg = self.get_full_dataframe.groupby(self._multi_group_cols).\
-                                     nunique()
+        gg = self.get_full_dataframe.groupby(self._multi_group_cols).nunique()
         # drop corrupted (by nunique()) grouping columns
         gg = gg.drop(self._multi_group_cols, axis=1)
         # reset index, drop unnecessary local_file column
         gg.reset_index().drop(self._multi_group_cols[1], axis=1)  
         return gg.groupby(self._multi_group_cols[0]).\
-                  agg(['mean']).round(2).stack().T
+                  agg(['min','max','mean','std']).round(2).stack().T
     
     @property
     def get_all_fields(self):
@@ -165,12 +199,31 @@ class ProcessJSON(object):
         gg = self.get_full_dataframe.groupby(self._multi_group_cols).size()
         return gg.groupby(self._group_col).agg(['min','max','mean','std']).\
                                          rename_axis('HDU stats:', axis=1)
+    
+    def get_num_files_writing_fields(self, instr=True, percent=True):
+        '''
+        instr:   if True, list percentages (or raw numbers) of files per 
+                 instrument that write each field, if False list total
+                 number of files (or percentages) over ALL instruments 
+                 (default=True)
+        percent: if True, list percentages of files that write each field, 
+                 if False, list raw numbers of files (default=True)
+        '''
+        zz = self.get_full_dataframe.groupby(self._multi_group_cols).nunique() > 0
+        if not instr:
+            gg = zz.sum()
+            return (gg/gg[self._file_hdr]*100).round(2) if percent else gg
+        else:
+            gg = zz.drop(['DTINSTRU'], axis=1).\
+                 rename(columns={self._file_hdr:'COUNT'}).\
+                 reset_index().drop(self._file_hdr, axis=1)
+            gg = gg.groupby('DTINSTRU').sum().T
+            return (gg/gg.loc['COUNT']*100).round(2) if percent else gg
 
     def get_unique_values_of_field(self, field):
         return list(self.get_full_dataframe[field].dropna().unique())
     
     def get_num_unique_values_by_keys(self, field1, field2):
         gg = self.get_full_dataframe.groupby([field1, field2]).nunique()
-        return pd.DataFrame(gg.loc[:, self._file_hdr]).rename(columns=\
-                                            {self._file_hdr:'TOTAL OCCURRENCES'})
-
+        return pd.DataFrame(gg.loc[:, self._file_hdr])\
+                 .rename(columns={self._file_hdr:'TOTAL OCCURRENCES'})
