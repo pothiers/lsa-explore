@@ -92,15 +92,17 @@ class ProcessJSON(object):
         # if important keys are provided, make a dummy starting dataframe
         # with those keys
         dd = [] if self._important == None else [pd.DataFrame(columns=self._important)]
+
         
-        for k in range(self._num):
-            jj = pd.read_json(self._file_list[k])
+        #!for k in range(self._num):
+        for filename in self._file_list):
+            jj = pd.read_json(filename)
             
             # verify the grouping-column value is unique and not missing
             # in this file across the HDUs, otherwise assert an error; 
             # TODO: make this a try/except: save bad filenames and keep moving
             assert jj[self._group_col].nunique() == 1, \
-                self._error_group_col.format(self._group_col,self._file_list[k])
+                self._error_group_col.format(self._group_col,filename)
             
             # if existing and unique, broadcast the grouping-column value
             # to the entire grouping column: this is required for proper
@@ -110,7 +112,7 @@ class ProcessJSON(object):
             
             # add the file-name column to the dataframe: 
             # this is required for grouping HDUs by filename
-            jj[self._file_hdr] = self._file_list[k][47:]
+            jj[self._file_hdr] = filename[47:]
             
             dd.append(jj)
             

@@ -16,10 +16,11 @@ def loadJson(json_files, topdir=None, resultsdir='~/pandasresults'):
              important=FIELDS, group_col='DTINSTRU', num_to_read=num,
              force_overwrite=force_overwrite)
     outdir = os.path.expanduser(resultsdir)
+
     ff=proc.get_num_files_writing_fields(instr=False, percent=False)
-    ff.to_csv(os.path.join(outdir,
-                           'csv',
-                           'get_num_files_writing_fields.csv'))
+    dirname = os.path.join(outdir,'csv')
+    os.makedirs(dirname, exist_ok=True)
+    ff.to_csv(os.path.join(dirname,'get_num_files_writing_fields.csv'))
 
 ##############################################################################
 
@@ -35,9 +36,13 @@ def main():
         description='My shiny new python program',
         epilog='EXAMPLE: %(prog)s a b"'
         )
-    parser.add_argument('topdir',
+    parser.add_argument('-t', '--topdir',
                         help='Dir containing json files (any level below)',
                         )
+    parser.add_argument('-j', '--jlist',
+                        type=argparse.FileType('rt'),
+                        help=('File containing list of JSON files to load.'
+                        ))
     parser.add_argument('-q', '--quality', help='Processing quality',
                         choices=['low','medium','high'], default='high')
     parser.add_argument('--loglevel',      help='Kind of diagnostic output',
@@ -45,12 +50,6 @@ def main():
                         default='WARNING',
                         )
     args = parser.parse_args()
-    #!args.outfile.close()
-    #!args.outfile = args.outfile.name
-
-    #!print 'My args=',args
-    #!print 'infile=',args.infile
-
 
     log_level = getattr(logging, args.loglevel.upper(), None)
     if not isinstance(log_level, int):
