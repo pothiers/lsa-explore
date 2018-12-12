@@ -3,7 +3,9 @@
 Load JSON format of FITS headers into pandas (HDF5 disk storage). Do analysis
 
 EXAMPLE:
-~/data/json-scrape/pipe.files
+./load_json_hdrs.py -j ~/data/json-scrape/pipe.files
+
+ipython --simple-prompt --no-color-info
 
 '''
 

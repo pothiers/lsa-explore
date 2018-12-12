@@ -85,7 +85,7 @@ class ProcessJSON(object):
         self._full_dataframe  = None
         self._multi_group_cols = None
         self._force_overwrite  = False
-        self.progress = 1 # Tell progress every N files.
+        self.progress = 1000 # Tell progress every N files.
         
         os.makedirs(self._savdir, exist_ok=True)
         
@@ -114,9 +114,8 @@ class ProcessJSON(object):
                 print('{} Processing file: {}'.format(count, filename))
                 print('Estimate done: {}'
                       .format(ec.est_complete(count)))
-
+                #@@@ Write snapshot (store as hdf5)
             count += 1
-            print('DBG: read json file: {}'.format(filename))
             jj = pd.read_json(filename)
             
             # verify the grouping-column value is unique and not missing
@@ -143,19 +142,21 @@ class ProcessJSON(object):
         self._processed = pd.concat(dd) if self._important == None else \
                           pd.concat(dd)[self._important]
             
-        self._metadata['num_files']   = self._num
-        self._metadata['date_record'] = self._date
-        h5store(self._savfile, self._processed, **self._metadata)
+        #!self._metadata['num_files']   = self._num
+        #!self._metadata['date_record'] = self._date
+        self._metadata['num_files'] = count
+        hdf_fname = '{}/snapshot-{}.hdf5'.format(self._savdir,count)
+        h5store(hdf_fname, self._processed, **self._metadata)
         
-    def _get_data(self, date):
-        self._date = date
-        self._savfile = self._savfmt.format(self._savdir, self._date)
-        if (os.path.isfile(self._savfile) and not self._force_overwrite):
-            print('reading {} from disk'.format(self._savfile))
-            with pd.HDFStore(self._savfile) as store:
-                self._processed, self._metadata = h5load(store)
-        else:
-            self._process()
+#!    def _get_data(self, date):
+#!        #!self._date = date
+#!        self._savfile = self._savfmt.format(self._savdir, self._date)
+#!        if (os.path.isfile(self._savfile) and not self._force_overwrite):
+#!            print('reading {} from disk'.format(self._savfile))
+#!            with pd.HDFStore(self._savfile) as store:
+#!                self._processed, self._metadata = h5load(store)
+#!        else:
+#!            self._process()
                     
     def run(self, files,
             group_col='DTINSTRU', important=None, 
@@ -173,7 +174,7 @@ class ProcessJSON(object):
         self._multi_group_cols  = [self._group_col, self._file_hdr]
 
         # add file-header column for filename: 
-        # important not to use append() method here: it breaks things
+        # important not to use app1end() method here: it breaks things
         self._important = important + [self._file_hdr] 
         self._force_overwrite = force_overwrite
         
