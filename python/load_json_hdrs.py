@@ -25,10 +25,15 @@ def loadJson(json_files, topdir=None, resultsdir='~/pandasresults'):
              force_overwrite=force_overwrite)
     outdir = os.path.expanduser(resultsdir)
 
-    ff=proc.get_num_files_writing_fields(instr=False, percent=False)
     dirname = os.path.join(outdir,'csv')
     os.makedirs(dirname, exist_ok=True)
-    ff.to_csv(os.path.join(dirname,'get_num_files_writing_fields.csv'))
+
+    proc.get_num_files_writing_fields(instr=False, percent=False)\
+        .to_csv(os.path.join(dirname,'get_num_files_writing_fields.csv'))
+    proc.get_HDU_stats.to_csv(os.path.join(dirname,'get_HDU_stats.csv'))
+    
+    print('Wrote output files to: {}'.format(dirname))
+
 
 ##############################################################################
 

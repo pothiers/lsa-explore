@@ -94,7 +94,7 @@ class ProcessJSON(object):
             for filename in fnmatch.filter(files, '*.json'):
                 yield os.path.join(dirpath, filename)
                
-    def _process(self, files, topdir='/home/pothiers/data/json-scrape'):
+    def _process(self, files, topdir='/home/pothiers/data/json-fits-headers'):
         '''process group of json files , save dataframe to disk'''
         count = 0
         #! print('processing ', self._txtfmt.format(self._date, self._num))
@@ -147,6 +147,7 @@ class ProcessJSON(object):
         self._metadata['num_files'] = count
         hdf_fname = '{}/snapshot-{}.hdf5'.format(self._savdir,count)
         h5store(hdf_fname, self._processed, **self._metadata)
+        print('Wrote snapshots to: {}'.format(self._savdir)
         
 #!    def _get_data(self, date):
 #!        #!self._date = date
