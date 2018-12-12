@@ -3,6 +3,8 @@ import fnmatch
 import numpy as np
 import pandas as pd
 
+from estimate_complete import Finish
+
 FIELDS = [
     'DATE-OBS',
     'DTCALDAT',
@@ -33,6 +35,18 @@ FIELDS = [
     ]
 
 
+def line_count(filename):
+    '''Number of lines in FILENAME'''
+    with open(filename) as f:
+        cnt = 0
+        for line in f: cnt += 1
+    return cnt
+
+def LINUX_line_count(filename):
+    '''Number of lines in FILENAME'''
+    return (int(subprocess.check_output(['wc', '-l', filename],
+                                        universal_newlines=True).split()[0]))
+
 
 # HDF5 storage of dataframe metadata from 
 # https://stackoverflow.com/questions/29129095/save-additional-attributes-in-pandas-dataframe/29130146#29130146
@@ -50,10 +64,10 @@ def h5load(store):
 
 class ProcessJSON(object):
 
-    def __init__(self, datadir,
+    def __init__(self,
                  savdir='~/pandas-snapshots',
                  file_hdr='local_file'):
-        self._datadir   = datadir
+        #self._datadir   = topdir
         self._savdir    = os.path.expanduser(savdir)
         self._file_hdr  = file_hdr
         self._txtfmt    = 'DATE:{}, {} FILES'  # date, number of files that date
@@ -62,7 +76,7 @@ class ProcessJSON(object):
         self._error_group_col = ('ERROR: grouping column {} in file {}'
                                  ' does not have a unique value')
         self._metadata        = {}
-        self._date            = None
+#!        self._date            = None
         self._important       = FIELDS
         self._processed       = None
         self._group_col       = None
@@ -71,31 +85,37 @@ class ProcessJSON(object):
         self._full_dataframe  = None
         self._multi_group_cols = None
         self._force_overwrite  = False
+        self.progress = 1 # Tell progress every N files.
         
         os.makedirs(self._savdir, exist_ok=True)
         
     def _get_file_list(self):
-        file_list = []
-        for dirpath, dirs, files in os.walk(os.path.join(self._datadir,
-                                                         self._date)): 
+        for dirpath, dirs, files in os.walk(os.path.join(self._datadir)): 
             for filename in fnmatch.filter(files, '*.json'):
-                file_list.append(os.path.join(dirpath, filename))
-        self._num = min(len(file_list), self._num_to_read)
-        self._file_list = file_list
+                yield os.path.join(dirpath, filename)
                
-    def _process(self):
+    def _process(self, files, topdir='/home/pothiers/data/json-scrape'):
         '''process group of json files , save dataframe to disk'''
-        
-        self._get_file_list()
-        print('processing ', self._txtfmt.format(self._date, self._num))
+        count = 0
+        #! print('processing ', self._txtfmt.format(self._date, self._num))
         
         # if important keys are provided, make a dummy starting dataframe
         # with those keys
         dd = [] if self._important == None else [pd.DataFrame(columns=self._important)]
 
-        
+        ec = Finish(line_count(files.name))
+
         #!for k in range(self._num):
-        for filename in self._file_list):
+        #!for filename in self._get_file_list():
+        for fname in files:
+            filename = os.path.join(topdir,fname)
+            if 0 == (count % self.progress):
+                print('{} Processing file: {}'.format(count, filename))
+                print('Estimate done: {}'
+                      .format(ec.est_complete(count)))
+
+            count += 1
+            print('DBG: read json file: {}'.format(filename))
             jj = pd.read_json(filename)
             
             # verify the grouping-column value is unique and not missing
@@ -136,10 +156,10 @@ class ProcessJSON(object):
         else:
             self._process()
                     
-    def run(self, date_range, group_col='DTINSTRU', important=None, 
+    def run(self, files,
+            group_col='DTINSTRU', important=None, 
             num_to_read=None, force_overwrite=False):  
         '''
-        date_range:      list of date directories to read
         group_col:       column name on which to group: usually 'DTINSTRU'
         important:       list of columns to keep in processed dataframes
         num_to_read:     number of files to read 
@@ -148,8 +168,6 @@ class ProcessJSON(object):
                          overwrite if True (default: False)
         '''
         raw = []
-        self._num_to_read = np.iinfo(np.int32).max if num_to_read == None else \
-                            num_to_read
         self._group_col   = group_col
         self._multi_group_cols  = [self._group_col, self._file_hdr]
 
@@ -159,11 +177,13 @@ class ProcessJSON(object):
         self._force_overwrite = force_overwrite
         
         # ensure date_range is a list if a scalar is input
-        date_range = date_range if isinstance(date_range, list) else [date_range]
-        
-        for k in date_range:
-            self._get_data(k)
-            raw.append(self._processed)
+        #!date_range = date_range if isinstance(date_range, list) else [date_range]
+        #!
+        #! for k in date_range:
+        #!     self._get_data(k)
+        #!     raw.append(self._processed)
+        self._process(files)
+        raw.append(self._processed)
         self._full_dataframe = pd.concat(raw)
         
     @property
