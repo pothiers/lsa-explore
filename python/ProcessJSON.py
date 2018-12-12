@@ -107,7 +107,8 @@ class ProcessJSON(object):
 
         #!for k in range(self._num):
         #!for filename in self._get_file_list():
-        for fname in files:
+        for line in files:
+            fname = line.strip()
             filename = os.path.join(topdir,fname)
             if 0 == (count % self.progress):
                 print('{} Processing file: {}'.format(count, filename))
