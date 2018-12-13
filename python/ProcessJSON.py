@@ -1,5 +1,6 @@
 import os
 import fnmatch
+from datetime import datetime
 import numpy as np
 import pandas as pd
 
@@ -85,7 +86,7 @@ class ProcessJSON(object):
         self._full_dataframe  = None
         self._multi_group_cols = None
         self._force_overwrite  = False
-        self.progress = 1000 # Tell progress every N files.
+        self.progress = 500 # Tell progress every N files.
         
         os.makedirs(self._savdir, exist_ok=True)
         
@@ -94,7 +95,7 @@ class ProcessJSON(object):
             for filename in fnmatch.filter(files, '*.json'):
                 yield os.path.join(dirpath, filename)
                
-    def _process(self, files, topdir='/home/pothiers/data/json-fits-headers'):
+    def _process(self, files, topdir='/'):
         '''process group of json files , save dataframe to disk'''
         count = 0
         #! print('processing ', self._txtfmt.format(self._date, self._num))
@@ -104,20 +105,21 @@ class ProcessJSON(object):
         dd = [] if self._important == None else [pd.DataFrame(columns=self._important)]
 
         ec = Finish(line_count(files.name))
-
+        print('[{}] DBG: Start reading files'.format(datetime.now().isoformat()))
         #!for k in range(self._num):
         #!for filename in self._get_file_list():
         for line in files:
             fname = line.strip()
             filename = os.path.join(topdir,fname)
+            #!print('DBG: filename="{}"'.format(filename))
             if 0 == (count % self.progress):
-                print('{} Processing file: {}'.format(count, filename))
-                print('Estimate done: {}'
-                      .format(ec.est_complete(count)))
-                #@@@ Write snapshot (store as hdf5)
+                #!print('{} Processing file: {}'.format(count, filename))
+                print('Estimate done: {}'.format(ec.est_complete(count)))
+                
             count += 1
+            #jj = pd.read_json(filename)
             jj = pd.read_json(filename)
-            
+
             # verify the grouping-column value is unique and not missing
             # in this file across the HDUs, otherwise assert an error; 
             # TODO: make this a try/except: save bad filenames and keep moving
@@ -132,22 +134,31 @@ class ProcessJSON(object):
             
             # add the file-name column to the dataframe: 
             # this is required for grouping HDUs by filename
-            jj[self._file_hdr] = filename[47:]
+            jj[self._file_hdr] = os.path.basename(filename)
             
             dd.append(jj)
-            
+            if 0 == (count % self.progress):
+                # Write snapshot (store as hdf5)
+                self._metadata['num_files'] = count
+                hdf_fname = '{}/snapshot-{}.hdf5'.format(self._savdir,count)
+                h5store(hdf_fname, pd.concat(dd)[self._important],
+                        **self._metadata)
+
+        print('[{}] DBG: All files read'.format(datetime.now().isoformat()))
         # if important keys are provided, cull the dataframe with those keys: 
         # do this AFTER concat with dummy frame with all the important keys, 
         # otherwise smaller frames may not have all of the keys
         self._processed = pd.concat(dd) if self._important == None else \
                           pd.concat(dd)[self._important]
             
+        print('[{}] DBG-3'.format(datetime.now().isoformat()))
         #!self._metadata['num_files']   = self._num
         #!self._metadata['date_record'] = self._date
         self._metadata['num_files'] = count
         hdf_fname = '{}/snapshot-{}.hdf5'.format(self._savdir,count)
         h5store(hdf_fname, self._processed, **self._metadata)
-        print('Wrote snapshots to: {}'.format(self._savdir)
+        print('[{}] DBG-4'.format(datetime.now().isoformat()))
+        print('Wrote snapshots to: {}'.format(self._savdir))
         
 #!    def _get_data(self, date):
 #!        #!self._date = date
@@ -160,6 +171,7 @@ class ProcessJSON(object):
 #!            self._process()
                     
     def run(self, files,
+            topdir='/',
             group_col='DTINSTRU', important=None, 
             num_to_read=None, force_overwrite=False):  
         '''
@@ -185,7 +197,21 @@ class ProcessJSON(object):
         #! for k in date_range:
         #!     self._get_data(k)
         #!     raw.append(self._processed)
-        self._process(files)
+
+
+        # your performance may suffer as PyTables will pickle object types that it cannot
+        #
+        # map directly to c-types
+        # [inferred_type->mixed,key->block0_values]
+        # [items->['DATE-OBS', 'DTCALDAT', 'DTTELESC', 'DTINSTRU',
+        # 'OBSTYPE', 'PROCTYPE', 'PRODTYPE', 'DTSITE', 'OBSERVAT',
+        # 'DTACQNAM', 'DTPROPID', 'RA', 'DEC', 'FILTER', 'OBSMODE',
+        # 'SEEING', 'OBJECT', 'local_file']]
+        #
+        # See: https://www.dataquest.io/blog/pandas-big-data/
+        # use "category" type for fields with small number of unique values (.astype)
+        self._process(files, topdir=topdir) # @@@ Specify field types to improve performance
+
         raw.append(self._processed)
         self._full_dataframe = pd.concat(raw)
         

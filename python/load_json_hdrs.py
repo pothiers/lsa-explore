@@ -3,7 +3,7 @@
 Load JSON format of FITS headers into pandas (HDF5 disk storage). Do analysis
 
 EXAMPLE:
-./load_json_hdrs.py -j ~/data/json-scrape/pipe.files
+./load_json_hdrs.py -j ~/data/json-scrape/pipe.files -t ~/data/json-scrape
 
 ipython --simple-prompt --no-color-info
 
@@ -21,6 +21,7 @@ def loadJson(json_files, topdir=None, resultsdir='~/pandasresults'):
     force_overwrite = True
     proc = ProcessJSON()
     proc.run(json_files,
+             topdir=topdir,
              important=FIELDS, group_col='DTINSTRU', num_to_read=num,
              force_overwrite=force_overwrite)
     outdir = os.path.expanduser(resultsdir)
@@ -33,6 +34,7 @@ def loadJson(json_files, topdir=None, resultsdir='~/pandasresults'):
     proc.get_HDU_stats.to_csv(os.path.join(dirname,'get_HDU_stats.csv'))
     
     print('Wrote output files to: {}'.format(dirname))
+    return proc
 
 
 ##############################################################################
@@ -47,15 +49,17 @@ def main():
     parser = argparse.ArgumentParser(
         #!version='1.0.1',
         description='My shiny new python program',
-        epilog='EXAMPLE: %(prog)s a b"'
+        epilog='EXAMPLE: ./load_json_hdrs.py -j ~/data/json-scrape/pipe.files -t ~/data/json-scrape'
         )
-    #!parser.add_argument('-t', '--topdir',
-    #!                    help='Dir containing json files (any level below)',
-    #!                    )
     parser.add_argument('-j', '--jlist',
                         type=argparse.FileType('rt'),
                         help=('File containing list of JSON files to load.'
+                              ' (relative paths to TOPDIR'
                         ))
+    dft_topdir='~/data/json-fits-headers'
+    parser.add_argument('-t', '--topdir',
+                        help=('Root dir of filenames in JLIST.'
+                              ' [default={}]').format(dft_topdir))
 
     dft_progress=int(1e3)
     parser.add_argument('--progress', type=int, default=dft_progress,
@@ -78,7 +82,7 @@ def main():
     logging.debug('Debug output is enabled!!!')
 
 
-    loadJson(args.jlist)
+    loadJson(args.jlist, topdir=args.topdir)
 
 if __name__ == '__main__':
     main()
