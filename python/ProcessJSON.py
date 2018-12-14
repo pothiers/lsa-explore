@@ -86,7 +86,8 @@ class ProcessJSON(object):
         self._full_dataframe  = None
         self._multi_group_cols = None
         self._force_overwrite  = False
-        self.progress = 500 # Tell progress every N files.
+        self.progress = 1000 # Tell progress every N files.
+        self.snapshot = 4000 # Write snapshot N files.
         
         os.makedirs(self._savdir, exist_ok=True)
         
@@ -99,6 +100,7 @@ class ProcessJSON(object):
         '''process group of json files , save dataframe to disk'''
         count = 0
         #! print('processing ', self._txtfmt.format(self._date, self._num))
+        print('Collecting for fields: {}'.format(self._important))
         
         # if important keys are provided, make a dummy starting dataframe
         # with those keys
@@ -117,7 +119,6 @@ class ProcessJSON(object):
                 print('Estimate done: {}'.format(ec.est_complete(count)))
                 
             count += 1
-            #jj = pd.read_json(filename)
             jj = pd.read_json(filename)
 
             # verify the grouping-column value is unique and not missing
@@ -137,7 +138,8 @@ class ProcessJSON(object):
             jj[self._file_hdr] = os.path.basename(filename)
             
             dd.append(jj)
-            if 0 == (count % self.progress):
+
+            if 0 == (count % self.snapshot):
                 # Write snapshot (store as hdf5)
                 self._metadata['num_files'] = count
                 hdf_fname = '{}/snapshot-{}.hdf5'.format(self._savdir,count)

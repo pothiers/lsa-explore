@@ -18,12 +18,11 @@ def loadJson(json_files, topdir=None, resultsdir='~/pandasresults'):
     dates = [str(x) for x in range(20170701, 20170726)]
     num = None #100  # 'None' to get all files
 
-    force_overwrite = True
     proc = ProcessJSON()
     proc.run(json_files,
              topdir=topdir,
              important=FIELDS, group_col='DTINSTRU', num_to_read=num,
-             force_overwrite=force_overwrite)
+             force_overwrite=True)
     outdir = os.path.expanduser(resultsdir)
 
     dirname = os.path.join(outdir,'csv')
