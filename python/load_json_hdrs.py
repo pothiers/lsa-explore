@@ -31,6 +31,16 @@ def loadJson(json_files, topdir=None, resultsdir='~/pandasresults'):
     proc.get_num_files_writing_fields(instr=False, percent=False)\
         .to_csv(os.path.join(dirname,'get_num_files_writing_fields.csv'))
     proc.get_HDU_stats.to_csv(os.path.join(dirname,'get_HDU_stats.csv'))
+
+    #! WS 12/14/18 added the following for comparison to older results
+    proc.get_num_files_writing_fields(instr=True, percent=True).to_csv(os.path.join(dirname,
+        'get_num_files_writing_fields(instr=True, percent=True).csv'))
+    proc.get_instr_vs_fields_unique_all_data.to_csv(os.path.join(dirname,
+        'get_instr_vs_fields_unique_all_data.csv'))
+    proc.get_num_unique_values_by_keys('DTINSTRU', 'OBSTYPE').to_csv(os.path.join(dirname,
+        'get_num_unique_values_by_keys_DTINSTRU_OBSTYPE.csv'))
+    proc.get_num_unique_values_by_keys('DTINSTRU', 'FILTER').to_csv(os.path.join(dirname,
+        'get_num_unique_values_by_keys_DTINSTRU_FILTER.csv'))
     
     print('Wrote output files to: {}'.format(dirname))
     return proc

@@ -3,6 +3,7 @@ import fnmatch
 from datetime import datetime
 import numpy as np
 import pandas as pd
+import pdb
 
 from estimate_complete import Finish
 
@@ -67,7 +68,7 @@ class ProcessJSON(object):
 
     def __init__(self,
                  savdir='~/pandas-snapshots',
-                 file_hdr='local_file'):
+                 file_hdr='local_file', progress=1000, snapshot=2000): #! WS 12/14/18
         #self._datadir   = topdir
         self._savdir    = os.path.expanduser(savdir)
         self._file_hdr  = file_hdr
@@ -79,15 +80,15 @@ class ProcessJSON(object):
         self._metadata        = {}
 #!        self._date            = None
         self._important       = FIELDS
-        self._processed       = None
+        #self._processed       = None  #! WS 12/14/18 no longer needed
         self._group_col       = None
         self._num             = None
         self._num_to_read     = None
         self._full_dataframe  = None
         self._multi_group_cols = None
-        self._force_overwrite  = False
-        self.progress = 1000 # Tell progress every N files.
-        self.snapshot = 4000 # Write snapshot N files.
+        self._force_overwrite  = False  #! WS 12/14/18 not currently implemented: will be trickier with new file looping
+        self.progress = progress # Tell progress every N files.  #! WS 12/14/18
+        self.snapshot = snapshot # Write snapshot N files.       #! WS 12/14/18
         
         os.makedirs(self._savdir, exist_ok=True)
         
@@ -97,6 +98,7 @@ class ProcessJSON(object):
                 yield os.path.join(dirpath, filename)
                
     def _process(self, files, topdir='/'):
+        #!pdb.set_trace()
         '''process group of json files , save dataframe to disk'''
         count = 0
         #! print('processing ', self._txtfmt.format(self._date, self._num))
@@ -105,6 +107,7 @@ class ProcessJSON(object):
         # if important keys are provided, make a dummy starting dataframe
         # with those keys
         dd = [] if self._important == None else [pd.DataFrame(columns=self._important)]
+        dd_tot = []  # WS 12/14/18  this is the accumulator list; dd is the to-write list
 
         ec = Finish(line_count(files.name))
         print('[{}] DBG: Start reading files'.format(datetime.now().isoformat()))
@@ -114,6 +117,8 @@ class ProcessJSON(object):
             fname = line.strip()
             filename = os.path.join(topdir,fname)
             #!print('DBG: filename="{}"'.format(filename))
+
+            
             if 0 == (count % self.progress):
                 #!print('{} Processing file: {}'.format(count, filename))
                 print('Estimate done: {}'.format(ec.est_complete(count)))
@@ -139,26 +144,31 @@ class ProcessJSON(object):
             
             dd.append(jj)
 
-            if 0 == (count % self.snapshot):
+            #! WS 12/14/18 added test for end of list
+            if 0 == (count % self.snapshot) or (count == line_count(files.name)):
                 # Write snapshot (store as hdf5)
-                self._metadata['num_files'] = count
+                #! WS 12/14/18 'count' to 'self.snapshot'
+                self._metadata['num_files'] = self.snapshot  #@@@ WS 12/14/18 will have to modify for trailing files
                 hdf_fname = '{}/snapshot-{}.hdf5'.format(self._savdir,count)
-                h5store(hdf_fname, pd.concat(dd)[self._important],
-                        **self._metadata)
+                df = pd.concat(dd)[self._important]  #! WS 12/14/18 important to strip fields here, for dd_tot
+                h5store(hdf_fname, df, **self._metadata)     #! WS 12/14/18 
+                dd_tot.append(df)                            #! WS 12/14/18  accumulate all df's
+                dd = [pd.DataFrame(columns=self._important)] #! WS 12/14/18  reset dd for next write
 
         print('[{}] DBG: All files read'.format(datetime.now().isoformat()))
         # if important keys are provided, cull the dataframe with those keys: 
         # do this AFTER concat with dummy frame with all the important keys, 
         # otherwise smaller frames may not have all of the keys
-        self._processed = pd.concat(dd) if self._important == None else \
-                          pd.concat(dd)[self._important]
-            
-        print('[{}] DBG-3'.format(datetime.now().isoformat()))
+        #! WS 12/14/18 this defines _full_dataframe, removed _process; changed dd to dd_tot
+        #!pdb.set_trace()
+        self._full_dataframe = pd.concat(dd_tot) if self._important == None else pd.concat(dd_tot)[self._important]
+
+        # print('[{}] DBG-3'.format(datetime.now().isoformat()))       #! WS 12/14/18 no need for this
         #!self._metadata['num_files']   = self._num
         #!self._metadata['date_record'] = self._date
-        self._metadata['num_files'] = count
-        hdf_fname = '{}/snapshot-{}.hdf5'.format(self._savdir,count)
-        h5store(hdf_fname, self._processed, **self._metadata)
+        # self._metadata['num_files'] = count                          #! WS 12/14/18 no need for this
+        # hdf_fname = '{}/snapshot-{}.hdf5'.format(self._savdir,count) #! WS 12/14/18 no need for this
+        # h5store(hdf_fname, self._processed, **self._metadata)  #! WS 12/14/18  don't want to write entire df!
         print('[{}] DBG-4'.format(datetime.now().isoformat()))
         print('Wrote snapshots to: {}'.format(self._savdir))
         
@@ -184,7 +194,7 @@ class ProcessJSON(object):
         force_overwrite: if processed dataframe exists on disk, 
                          overwrite if True (default: False)
         '''
-        raw = []
+        # raw = []   #! WS 12/14/18 OBE
         self._group_col   = group_col
         self._multi_group_cols  = [self._group_col, self._file_hdr]
 
@@ -199,23 +209,11 @@ class ProcessJSON(object):
         #! for k in date_range:
         #!     self._get_data(k)
         #!     raw.append(self._processed)
-
-
-        # your performance may suffer as PyTables will pickle object types that it cannot
-        #
-        # map directly to c-types
-        # [inferred_type->mixed,key->block0_values]
-        # [items->['DATE-OBS', 'DTCALDAT', 'DTTELESC', 'DTINSTRU',
-        # 'OBSTYPE', 'PROCTYPE', 'PRODTYPE', 'DTSITE', 'OBSERVAT',
-        # 'DTACQNAM', 'DTPROPID', 'RA', 'DEC', 'FILTER', 'OBSMODE',
-        # 'SEEING', 'OBJECT', 'local_file']]
-        #
-        # See: https://www.dataquest.io/blog/pandas-big-data/
-        # use "category" type for fields with small number of unique values (.astype)
+ 
         self._process(files, topdir=topdir) # @@@ Specify field types to improve performance
 
-        raw.append(self._processed)
-        self._full_dataframe = pd.concat(raw)
+        # raw.append(self._processed)           #! WS 12/14/18 OBE
+        # self._full_dataframe = pd.concat(raw) #! WS 12/14/18 OBE
         
     @property
     def get_full_dataframe(self):
