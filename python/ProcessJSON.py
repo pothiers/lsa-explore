@@ -36,7 +36,7 @@ FIELDS = [
     'OBJECT',
     ]
 
-dtypes = {
+DTYPES = {
     'DATE-OBS': 'datetime64',
     'DTCALDAT': 'datetime64',
     'DTTELESC': 'category',
@@ -176,10 +176,11 @@ class ProcessJSON(object):
                 #! WS 12/14/18 'count' to 'self.snapshot'
                 self._metadata['num_files'] = self.snapshot  #@@@ WS 12/14/18 will have to modify for trailing files
                 hdf_fname = '{}/snapshot-{}.hdf5'.format(self._savdir,count)
-                df = pd.concat(dd)[self._important]  #! WS 12/14/18 important to strip fields here, for dd_tot
+                # important to strip fields here, for dd_tot
+                df = pd.concat(dd)[self._important].astype(dtype=DTYPES)
                 h5store(hdf_fname, df, **self._metadata)     #! WS 12/14/18 
                 dd_tot.append(df)                            #! WS 12/14/18  accumulate all df's
-                dd = [pd.DataFrame(columns=self._important)] #! WS 12/14/18  reset dd for next write
+                dd = [pd.DataFrame(columns=self._important).astype(dtype=DTYPES)] #! WS 12/14/18  reset dd for next write
 
         print('[{}] DBG: All files read'.format(datetime.now().isoformat()))
         # if important keys are provided, cull the dataframe with those keys: 
