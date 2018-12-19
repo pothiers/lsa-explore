@@ -36,6 +36,27 @@ FIELDS = [
     'OBJECT',
     ]
 
+dtypes = {
+    'DATE-OBS': 'datetime64',
+    'DTCALDAT': 'datetime64',
+    'DTTELESC': 'category',
+    'DTINSTRU': 'category',
+    'OBSTYPE':  'category',
+    'PROCTYPE': 'category',
+    'PRODTYPE': 'category',
+    'DTSITE':   'category',
+    'OBSERVAT': 'category',
+    'DTACQNAM': 'object',
+    'DTPROPID': 'object',
+    'RA':       'object', 
+    'DEC':      'object',
+    'FILTER':   'object',
+    'EXPTIME':  'float32', #'EXPOSURE', 
+    'OBSMODE':  'object',
+    'SEEING':   'object',
+    'OBJECT':   'object',
+}
+
 
 def line_count(filename):
     '''Number of lines in FILENAME'''
@@ -68,7 +89,7 @@ class ProcessJSON(object):
 
     def __init__(self,
                  savdir='~/pandas-snapshots',
-                 file_hdr='local_file', progress=1000, snapshot=2000): #! WS 12/14/18
+                 file_hdr='local_file', progress=1000, snapshot=2000):
         #self._datadir   = topdir
         self._savdir    = os.path.expanduser(savdir)
         self._file_hdr  = file_hdr
@@ -78,17 +99,15 @@ class ProcessJSON(object):
         self._error_group_col = ('ERROR: grouping column {} in file {}'
                                  ' does not have a unique value')
         self._metadata        = {}
-#!        self._date            = None
         self._important       = FIELDS
-        #self._processed       = None  #! WS 12/14/18 no longer needed
         self._group_col       = None
         self._num             = None
         self._num_to_read     = None
         self._full_dataframe  = None
         self._multi_group_cols = None
-        self._force_overwrite  = False  #! WS 12/14/18 not currently implemented: will be trickier with new file looping
-        self.progress = progress # Tell progress every N files.  #! WS 12/14/18
-        self.snapshot = snapshot # Write snapshot N files.       #! WS 12/14/18
+        self._force_overwrite  = False  #! not currently implemented: will be trickier with new file looping
+        self.progress = progress # Tell progress every N files.  
+        self.snapshot = snapshot # Write snapshot N files.
         
         os.makedirs(self._savdir, exist_ok=True)
         
@@ -107,15 +126,23 @@ class ProcessJSON(object):
         # if important keys are provided, make a dummy starting dataframe
         # with those keys
         dd = [] if self._important == None else [pd.DataFrame(columns=self._important)]
-        dd_tot = []  # WS 12/14/18  this is the accumulator list; dd is the to-write list
+        dd_tot = []  # this is the accumulator list; dd is the to-write list
 
         ec = Finish(line_count(files.name))
-        print('[{}] DBG: Start reading files'.format(datetime.now().isoformat()))
+        print('[{}] DBG: Start reading files'
+              .format(datetime.now().isoformat()))
         #!for k in range(self._num):
         #!for filename in self._get_file_list():
         for line in files:
             fname = line.strip()
-            filename = os.path.join(topdir,fname)
+            filename = os.path.expanduser(os.path.join(topdir,fname))
+
+            if not os.path.exists(filename):
+                msg = (('JSON file "{}" does not exist.'
+                        ' Did you set --topdir ("{}") correctly?')
+                       .format(filename, topdir))
+                raise Exception(msg)
+                
             #!print('DBG: filename="{}"'.format(filename))
 
             
@@ -144,7 +171,6 @@ class ProcessJSON(object):
             
             dd.append(jj)
 
-            #! WS 12/14/18 added test for end of list
             if 0 == (count % self.snapshot) or (count == line_count(files.name)):
                 # Write snapshot (store as hdf5)
                 #! WS 12/14/18 'count' to 'self.snapshot'
@@ -163,25 +189,13 @@ class ProcessJSON(object):
         #!pdb.set_trace()
         self._full_dataframe = pd.concat(dd_tot) if self._important == None else pd.concat(dd_tot)[self._important]
 
-        # print('[{}] DBG-3'.format(datetime.now().isoformat()))       #! WS 12/14/18 no need for this
         #!self._metadata['num_files']   = self._num
         #!self._metadata['date_record'] = self._date
-        # self._metadata['num_files'] = count                          #! WS 12/14/18 no need for this
         # hdf_fname = '{}/snapshot-{}.hdf5'.format(self._savdir,count) #! WS 12/14/18 no need for this
         # h5store(hdf_fname, self._processed, **self._metadata)  #! WS 12/14/18  don't want to write entire df!
         print('[{}] DBG-4'.format(datetime.now().isoformat()))
         print('Wrote snapshots to: {}'.format(self._savdir))
         
-#!    def _get_data(self, date):
-#!        #!self._date = date
-#!        self._savfile = self._savfmt.format(self._savdir, self._date)
-#!        if (os.path.isfile(self._savfile) and not self._force_overwrite):
-#!            print('reading {} from disk'.format(self._savfile))
-#!            with pd.HDFStore(self._savfile) as store:
-#!                self._processed, self._metadata = h5load(store)
-#!        else:
-#!            self._process()
-                    
     def run(self, files,
             topdir='/',
             group_col='DTINSTRU', important=None, 
@@ -203,17 +217,9 @@ class ProcessJSON(object):
         self._important = important + [self._file_hdr] 
         self._force_overwrite = force_overwrite
         
-        # ensure date_range is a list if a scalar is input
-        #!date_range = date_range if isinstance(date_range, list) else [date_range]
-        #!
-        #! for k in date_range:
-        #!     self._get_data(k)
-        #!     raw.append(self._processed)
  
         self._process(files, topdir=topdir) # @@@ Specify field types to improve performance
 
-        # raw.append(self._processed)           #! WS 12/14/18 OBE
-        # self._full_dataframe = pd.concat(raw) #! WS 12/14/18 OBE
         
     @property
     def get_full_dataframe(self):
