@@ -278,3 +278,14 @@ class ProcessJSON(object):
         gg = self.get_full_dataframe.groupby([field1, field2]).nunique()
         return pd.DataFrame(gg.loc[:, self._file_hdr])\
                  .rename(columns={self._file_hdr:'TOTAL OCCURRENCES'})
+
+    @property    
+    def pct_files_with_values(self):
+        """Like get_num_files_writing_fields(True, True), but simplier.
+        """
+
+        gpcol = self._group_col
+        filecol = self._file_hdr
+        
+        gpcount = df2.groupby(gpcol).count()
+        return gpcount.divide(gpcount[filecol], axis=0).T

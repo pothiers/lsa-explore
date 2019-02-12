@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 '''\
 Load JSON format of FITS headers into pandas (HDF5 disk storage). Do analysis
 
